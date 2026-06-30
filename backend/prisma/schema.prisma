@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AccountStatus {
+  ACTIVE
+  BLOCKED
+  CLOSED
+}
+
+enum EntryType {
+  DEBIT
+  CREDIT
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REVERSED
+}
+
+model Account {
+  id          String        @id @default(uuid())
+  userId      String
+  accountType String
+  currency    String
+  status      AccountStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+
+  ledgerEntries LedgerEntry[]
+  snapshots     Snapshot[]
+}
+
+model Transaction {
+  id          String             @id @default(uuid())
+  reference   String?
+  status      TransactionStatus  @default(PENDING)
+  createdAt   DateTime           @default(now())
+
+  ledgerEntries LedgerEntry[]
+}
+
+model LedgerEntry {
+  id            String      @id @default(uuid())
+  accountId     String
+  transactionId String
+  entryType     EntryType
+  amount        Decimal
+  description   String?
+  createdAt     DateTime    @default(now())
+
+  account       Account     @relation(fields: [accountId], references: [id])
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+}
+
+model Snapshot {
+  id          String    @id @default(uuid())
+  accountId   String
+  balance     Decimal
+  lastEventId String
+  createdAt   DateTime  @default(now())
+
+  account     Account   @relation(fields: [accountId], references: [id])
+}
