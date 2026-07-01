@@ -34,6 +34,7 @@ model Account {
 
   ledgerEntries LedgerEntry[]
   snapshots     Snapshot[]
+  fraudAlerts   FraudAlert[]
 }
 
 model Transaction {
@@ -43,6 +44,7 @@ model Transaction {
   createdAt   DateTime           @default(now())
 
   ledgerEntries LedgerEntry[]
+  fraudAlerts   FraudAlert[]
 }
 
 model LedgerEntry {
@@ -66,4 +68,17 @@ model Snapshot {
   createdAt   DateTime  @default(now())
 
   account     Account   @relation(fields: [accountId], references: [id])
+}
+
+model FraudAlert {
+  id             String   @id @default(uuid())
+  transactionId  String
+  accountId      String
+  riskScore      Int
+  severity       String   // "LOW" | "MEDIUM" | "HIGH"
+  triggeredRules String[]
+  createdAt      DateTime @default(now())
+
+  transaction    Transaction @relation(fields: [transactionId], references: [id])
+  account        Account     @relation(fields: [accountId], references: [id])
 }
