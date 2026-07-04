@@ -82,3 +82,30 @@ model FraudAlert {
   transaction    Transaction @relation(fields: [transactionId], references: [id])
   account        Account     @relation(fields: [accountId], references: [id])
 }
+
+model ExternalSettlement {
+  id                  String   @id @default(uuid())
+  transactionId       String
+  amount              Decimal
+  status              String   // "SUCCESS" | "FAILED"
+  settlementTimestamp DateTime
+  createdAt           DateTime @default(now())
+}
+
+model ReconciliationRun {
+  id              String                  @id @default(uuid())
+  totalMatched    Int
+  totalMismatched Int
+  createdAt       DateTime                @default(now())
+  failures        ReconciliationFailure[]
+}
+
+model ReconciliationFailure {
+  id            String            @id @default(uuid())
+  runId         String
+  transactionId String
+  mismatchType  String            // "MISSING_SETTLEMENT" | "AMOUNT_MISMATCH" | "STATUS_MISMATCH" | "DUPLICATE_SETTLEMENT"
+  details       String?
+  createdAt     DateTime          @default(now())
+  run           ReconciliationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+}
