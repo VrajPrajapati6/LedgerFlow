@@ -84,3 +84,126 @@ export const executeTransfer = async (
     };
   });
 };
+
+export const getTransactions = async (filters: {
+  search?: string;
+  status?: string;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+}) => {
+  const whereClause: any = {};
+
+  if (filters.status) {
+    whereClause.status = filters.status;
+  }
+
+  if (filters.search) {
+    whereClause.OR = [
+      { id: { contains: filters.search, mode: "insensitive" } },
+      { reference: { contains: filters.search, mode: "insensitive" } },
+    ];
+  }
+
+  const transactions = await prisma.transaction.findMany({
+    where: whereClause,
+    include: {
+      ledgerEntries: true,
+      fraudAlerts: true,
+    },
+    orderBy: filters.sortBy
+      ? { [filters.sortBy]: filters.sortOrder || "desc" }
+      : { createdAt: "desc" },
+    take: filters.limit || 50,
+    skip: filters.offset || 0,
+  });
+
+  const totalCount = await prisma.transaction.count({ where: whereClause });
+
+  const formatted = transactions.map((tx) => {
+    const debitEntry = tx.ledgerEntries.find((e) => e.entryType === "DEBIT");
+    const creditEntry = tx.ledgerEntries.find((e) => e.entryType === "CREDIT");
+
+    const amount = debitEntry
+      ? Number(debitEntry.amount)
+      : creditEntry
+      ? Number(creditEntry.amount)
+      : 0;
+
+    const sender = debitEntry ? debitEntry.accountId : null;
+    const receiver = creditEntry ? creditEntry.accountId : null;
+
+    const riskAlert = tx.fraudAlerts[0];
+    const riskScore = riskAlert ? riskAlert.riskScore : 0;
+
+    return {
+      id: tx.id,
+      reference: tx.reference,
+      status: tx.status,
+      createdAt: tx.createdAt,
+      amount,
+      sender,
+      receiver,
+      riskScore,
+    };
+  });
+
+  return {
+    transactions: formatted,
+    totalCount,
+  };
+};
+
+export const getTransactionById = async (id: string) => {
+  const tx = await prisma.transaction.findUnique({
+    where: { id },
+    include: {
+      ledgerEntries: {
+        include: {
+          account: true,
+        },
+      },
+      fraudAlerts: true,
+    },
+  });
+
+  if (!tx) return null;
+
+  const debitEntry = tx.ledgerEntries.find((e) => e.entryType === "DEBIT");
+  const creditEntry = tx.ledgerEntries.find((e) => e.entryType === "CREDIT");
+
+  const amount = debitEntry
+    ? Number(debitEntry.amount)
+    : creditEntry
+    ? Number(creditEntry.amount)
+    : 0;
+
+  const sender = debitEntry ? debitEntry.accountId : null;
+  const receiver = creditEntry ? creditEntry.accountId : null;
+
+  const riskAlert = tx.fraudAlerts[0];
+  const riskScore = riskAlert ? riskAlert.riskScore : 0;
+
+  return {
+    id: tx.id,
+    reference: tx.reference,
+    status: tx.status,
+    createdAt: tx.createdAt,
+    amount,
+    sender,
+    receiver,
+    riskScore,
+    ledgerEntries: tx.ledgerEntries.map((e) => ({
+      id: e.id,
+      accountId: e.accountId,
+      accountType: e.account.accountType,
+      currency: e.account.currency,
+      entryType: e.entryType,
+      amount: Number(e.amount),
+      description: e.description,
+      createdAt: e.createdAt,
+    })),
+    fraudAlerts: tx.fraudAlerts,
+  };
+};
