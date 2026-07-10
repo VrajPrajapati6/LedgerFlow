@@ -15,6 +15,7 @@ export const transferController = async (
       data: result,
     });
   } catch (error) {
+    console.error("Transfer execution failed:", error);
     const message = error instanceof Error ? error.message : "Internal server error";
 
     // Handle business validation failures with 400 Bad Request
