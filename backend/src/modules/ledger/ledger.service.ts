@@ -98,3 +98,66 @@ export const getBalanceAtTimestamp = async (
     currency: account.currency,
   };
 };
+
+export const getLedgerEntries = async (filters: {
+  accountId?: string;
+  transactionId?: string;
+  entryType?: "DEBIT" | "CREDIT";
+  startDate?: Date;
+  endDate?: Date;
+  limit?: number;
+  offset?: number;
+}) => {
+  const whereClause: any = {};
+
+  if (filters.accountId) {
+    whereClause.accountId = filters.accountId;
+  }
+  if (filters.transactionId) {
+    whereClause.transactionId = filters.transactionId;
+  }
+  if (filters.entryType) {
+    whereClause.entryType = filters.entryType;
+  }
+  if (filters.startDate || filters.endDate) {
+    whereClause.createdAt = {};
+    if (filters.startDate) {
+      whereClause.createdAt.gte = filters.startDate;
+    }
+    if (filters.endDate) {
+      whereClause.createdAt.lte = filters.endDate;
+    }
+  }
+
+  const entries = await prisma.ledgerEntry.findMany({
+    where: whereClause,
+    include: {
+      account: true,
+      transaction: true,
+    },
+    orderBy: { createdAt: "desc" },
+    take: filters.limit || 50,
+    skip: filters.offset || 0,
+  });
+
+  const totalCount = await prisma.ledgerEntry.count({ where: whereClause });
+
+  const formatted = entries.map((e) => ({
+    id: e.id,
+    accountId: e.accountId,
+    accountType: e.account.accountType,
+    currency: e.account.currency,
+    transactionId: e.transactionId,
+    transactionReference: e.transaction.reference,
+    transactionStatus: e.transaction.status,
+    entryType: e.entryType,
+    amount: Number(e.amount),
+    description: e.description,
+    createdAt: e.createdAt,
+  }));
+
+  return {
+    entries: formatted,
+    totalCount,
+  };
+};

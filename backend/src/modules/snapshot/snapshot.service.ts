@@ -167,3 +167,22 @@ export const getOptimizedBalance = async (
     snapshotTimestamp: latestSnapshot.createdAt,
   };
 };
+
+export const getSnapshots = async () => {
+  const snapshots = await prisma.snapshot.findMany({
+    include: {
+      account: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return snapshots.map((s) => ({
+    id: s.id,
+    accountId: s.accountId,
+    accountType: s.account.accountType,
+    currency: s.account.currency,
+    balance: Number(s.balance),
+    lastEventId: s.lastEventId,
+    createdAt: s.createdAt,
+  }));
+};

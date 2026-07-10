@@ -50,7 +50,7 @@ export const getTransactionsController = async (
       offset: offset ? parseInt(offset as string, 10) : undefined,
     };
 
-    const result = await getTransactions(filters);
+    const result = await getTransactions(filters as any);
 
     res.status(200).json({
       success: true,
