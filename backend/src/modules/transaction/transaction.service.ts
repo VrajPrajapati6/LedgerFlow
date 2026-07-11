@@ -207,3 +207,46 @@ export const getTransactionById = async (id: string) => {
     fraudAlerts: tx.fraudAlerts,
   };
 };
+
+export const executeDeposit = async (input: {
+  accountId: string;
+  amount: number;
+  description?: string;
+}) => {
+  const { accountId, amount, description } = input;
+
+  const account = await prisma.account.findUnique({
+    where: { id: accountId },
+  });
+  if (!account) {
+    throw new Error(`Account with ID ${accountId} not found`);
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    const reference = `DEP-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const transaction = await tx.transaction.create({
+      data: {
+        reference,
+        status: "SUCCESS",
+      },
+    });
+
+    await tx.ledgerEntry.create({
+      data: {
+        accountId,
+        transactionId: transaction.id,
+        entryType: "CREDIT",
+        amount,
+        description: description || "Deposit Funding",
+      },
+    });
+
+    return {
+      transactionId: transaction.id,
+      reference,
+      accountId,
+      amount,
+      createdAt: transaction.createdAt,
+    };
+  });
+};
