@@ -21,7 +21,7 @@ export function Shell({ children }: ShellProps) {
   }, [pathname]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-950 text-slate-100 font-sans">
+    <div className="flex h-screen w-screen overflow-hidden bg-slate-50 font-sans">
       {/* Desktop Persistent Sidebar */}
       <Sidebar
         isCollapsed={isCollapsed}
@@ -33,7 +33,7 @@ export function Shell({ children }: ShellProps) {
       <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
         <SheetContent
           side="left"
-          className="p-0 w-64 bg-slate-950 border-r border-slate-900"
+          className="p-0 w-64 bg-white border-r border-slate-200"
         >
           <Sidebar
             isCollapsed={false}
@@ -49,16 +49,16 @@ export function Shell({ children }: ShellProps) {
         {/* Top Sticky Nav Header */}
         <TopNav onMenuClick={() => setIsMobileOpen(true)} />
 
-        {/* Scrollable Page Wrapper with Animations */}
-        <main className="flex-1 overflow-y-auto bg-slate-900/40 p-4 md:p-6 lg:p-8">
+        {/* Scrollable Page Wrapper */}
+        <main className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-6 lg:p-8">
           <AnimatePresence mode="wait">
             <motion.div
               key={pathname}
-              initial={{ opacity: 0, y: 4 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.15, ease: "easeInOut" }}
-              className="max-w-7xl mx-auto h-full"
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="max-w-7xl mx-auto"
             >
               {children}
             </motion.div>

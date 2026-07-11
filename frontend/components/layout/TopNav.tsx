@@ -1,11 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { usePathname } from "next/navigation";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { SearchPalette } from "./SearchPalette";
 import { NotificationMenu } from "./NotificationMenu";
-import { ThemeSwitch } from "./ThemeSwitch";
 import { UserMenu } from "./UserMenu";
 import { Menu } from "lucide-react";
 
@@ -14,41 +12,40 @@ interface TopNavProps {
 }
 
 export function TopNav({ onMenuClick }: TopNavProps) {
-  const pathname = usePathname();
-
   return (
-    <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-slate-900 bg-slate-950/80 px-4 backdrop-blur select-none">
+    <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur-sm select-none">
       <div className="flex items-center gap-3">
         {/* Mobile Menu Toggle */}
         <button
           onClick={onMenuClick}
-          className="flex h-8 w-8 items-center justify-center rounded border border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-900 md:hidden transition-colors"
+          className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100 md:hidden transition-colors"
+          aria-label="Open navigation menu"
         >
           <Menu className="h-4 w-4" />
         </button>
 
-        {/* Title & Breadcrumbs */}
-        <div className="hidden sm:flex flex-col">
+        {/* Breadcrumbs */}
+        <div className="hidden sm:flex">
           <Breadcrumbs />
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         {/* Environment Badge */}
-        <span className="hidden md:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/25 font-mono">
-          Development
+        <span className="hidden md:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 font-mono tracking-wide">
+          DEV ENV
         </span>
 
         {/* Global Command Search */}
         <SearchPalette />
 
-        {/* Notification Bell Menu */}
+        {/* Notification Bell */}
         <NotificationMenu />
 
-        {/* Theme Switching Switch */}
-        <ThemeSwitch />
+        {/* Divider */}
+        <div className="hidden md:block h-5 w-px bg-slate-200" />
 
-        {/* User Account Menu */}
+        {/* User Menu */}
         <UserMenu />
       </div>
     </header>

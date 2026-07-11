@@ -1,287 +1,139 @@
 "use client";
 
 import * as React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useQuery } from "@tanstack/react-query";
 import {
-  ResponsiveContainer,
   AreaChart,
   Area,
   XAxis,
   YAxis,
+  CartesianGrid,
   Tooltip,
-  PieChart,
-  Pie,
-  Cell,
+  ResponsiveContainer,
+  Legend,
 } from "recharts";
-import { Transaction } from "@/types";
+import { transactionService } from "@/services/api/endpoints";
+import { SkeletonChart } from "@/components/feedback/Loader";
 
-interface TransactionAnalyticsProps {
-  transactions: Transaction[];
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-slate-200 shadow-md rounded-lg p-3 text-xs">
+      <p className="font-semibold text-slate-700 mb-1">{label}</p>
+      {payload.map((entry: any) => (
+        <p key={entry.name} style={{ color: entry.color }} className="flex justify-between gap-4">
+          <span>{entry.name}</span>
+          <span className="font-medium">{entry.value}</span>
+        </p>
+      ))}
+    </div>
+  );
 }
 
-export function TransactionAnalytics({
-  transactions = [],
-}: TransactionAnalyticsProps) {
-  // Aggregate daily transaction volume
-  const getVolumeData = () => {
-    const dates: Record<string, { count: number; amount: number }> = {};
+export function TransactionAnalytics() {
+  const { data: transactions = [], isLoading } = useQuery({
+    queryKey: ["transactions"],
+    queryFn: transactionService.list,
+  });
 
-    // Sort transactions chronologically
-    const sorted = [...transactions].sort(
-      (a, b) =>
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
+  if (isLoading) return <SkeletonChart />;
 
-    sorted.forEach((tx) => {
-      const d = new Date(tx.createdAt).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      });
-      if (!dates[d]) {
-        dates[d] = { count: 0, amount: 0 };
-      }
-      dates[d].count += 1;
-      dates[d].amount += tx.amount || 0;
+  // Build daily buckets for last 7 days
+  const days: Record<string, { success: number; failed: number; pending: number }> = {};
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    days[key] = { success: 0, failed: 0, pending: 0 };
+  }
+
+  transactions.forEach((t) => {
+    const key = new Date(t.createdAt).toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
     });
-
-    const list = Object.entries(dates).map(([date, val]) => ({
-      date,
-      count: val.count,
-      amount: val.amount,
-    }));
-
-    if (list.length === 0) {
-      // Return mock trend line if system has zero transactions to ensure recruiter sees chart
-      return [
-        { date: "Jul 05", count: 2, amount: 1500 },
-        { date: "Jul 06", count: 4, amount: 3500 },
-        { date: "Jul 07", count: 3, amount: 2800 },
-        { date: "Jul 08", count: 6, amount: 6200 },
-        { date: "Jul 09", count: 8, amount: 9400 },
-        { date: "Jul 10", count: 5, amount: 5100 },
-        { date: "Jul 11", count: 12, amount: 14200 },
-      ];
+    if (key in days) {
+      if (t.status === "SUCCESS") days[key].success++;
+      else if (t.status === "FAILED") days[key].failed++;
+      else if (t.status === "PENDING") days[key].pending++;
     }
-    return list;
-  };
+  });
 
-  // Aggregate debit vs credit count distribution
-  const getDistributionData = () => {
-    let debits = 0;
-    let credits = 0;
-
-    transactions.forEach((tx) => {
-      if (tx.reference?.startsWith("DEP")) {
-        credits += 1;
-      } else {
-        debits += 1;
-        credits += 1;
-      }
-    });
-
-    if (debits === 0 && credits === 0) {
-      return [
-        { name: "Debits", value: 65, color: "#3b82f6" },
-        { name: "Credits", value: 35, color: "#10b981" },
-      ];
-    }
-
-    return [
-      { name: "Debits", value: debits, color: "#3b82f6" }, // Blue
-      { name: "Credits", value: credits, color: "#10b981" }, // Green
-    ];
-  };
-
-  // Find 4 largest transfers
-  const getLargestTransfers = () => {
-    const list = [...transactions]
-      .filter((t) => !t.reference?.startsWith("DEP"))
-      .sort((a, b) => (b.amount || 0) - (a.amount || 0))
-      .slice(0, 4);
-
-    if (list.length === 0) {
-      return [
-        { id: "TX-A01", amount: 5000, desc: "Treasury Inflow" },
-        { id: "TX-B02", amount: 3200, desc: "Liquidity Sweep" },
-        { id: "TX-C03", amount: 1800, desc: "Settlement Dispersal" },
-        { id: "TX-D04", amount: 1200, desc: "Vendor Clearing" },
-      ];
-    }
-
-    return list.map((tx) => ({
-      id: tx.reference || tx.id.slice(0, 8),
-      amount: tx.amount || 0,
-      desc: tx.sender ? `Transfer` : "Seed Inflow",
-    }));
-  };
-
-  const volumeData = getVolumeData();
-  const distributionData = getDistributionData();
-  const largestTransfers = getLargestTransfers();
+  const chartData = Object.entries(days).map(([date, stats]) => ({
+    date,
+    ...stats,
+  }));
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 select-none">
-      {/* Daily Transaction Volume Area Chart */}
-      <Card className="lg:col-span-2 bg-slate-950 border-slate-900">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-mono text-slate-400 uppercase tracking-wider">
-            Transaction Volume Trend (USD)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={volumeData}
-              margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-            >
-              <defs>
-                <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis
-                dataKey="date"
-                stroke="#475569"
-                fontSize={9}
-                fontFamily="monospace"
-                tickLine={false}
-              />
-              <YAxis
-                stroke="#475569"
-                fontSize={9}
-                fontFamily="monospace"
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v) => `$${v}`}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#020617",
-                  borderColor: "#1e293b",
-                  borderRadius: "8px",
-                  fontSize: "11px",
-                  fontFamily: "monospace",
-                  color: "#cbd5e1",
-                }}
-                formatter={(v: any) => [
-                  `$${Number(v).toLocaleString()}`,
-                  "Volume",
-                ]}
-              />
-              <Area
-                type="monotone"
-                dataKey="amount"
-                stroke="#3b82f6"
-                strokeWidth={1.5}
-                fillOpacity={1}
-                fill="url(#colorAmount)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {/* Credit / Debit Distribution Pie Chart */}
-      <Card className="bg-slate-950 border-slate-900">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-mono text-slate-400 uppercase tracking-wider">
-            Debit vs Credit Distribution
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="h-64 flex flex-col justify-between py-4">
-          <div className="h-40 w-full relative">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={distributionData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={70}
-                  paddingAngle={4}
-                  dataKey="value"
-                >
-                  {distributionData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#020617",
-                    borderColor: "#1e293b",
-                    fontSize: "11px",
-                    fontFamily: "monospace",
-                    color: "#cbd5e1",
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
-              <span className="text-[9px] text-slate-500 font-mono uppercase">
-                Total Flow events
-              </span>
-              <span className="text-lg font-bold text-white font-mono">
-                {distributionData.reduce((acc, curr) => acc + curr.value, 0)}
-              </span>
-            </div>
-          </div>
-          <div className="flex justify-around text-[10px] font-mono border-t border-slate-900 pt-3">
-            {distributionData.map((d) => (
-              <div key={d.name} className="flex items-center gap-1.5">
-                <span
-                  className="h-2 w-2 rounded-full animate-pulse"
-                  style={{ backgroundColor: d.color }}
-                />
-                <span className="text-slate-400">{d.name}</span>
-                <span className="text-white font-semibold">{d.value}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Largest Transfers Horizontal Bar list */}
-      <Card className="lg:col-span-3 bg-slate-950 border-slate-900">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-mono text-slate-400 uppercase tracking-wider">
-            Largest Atomic Transfers
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="py-2">
-          <div className="space-y-3">
-            {largestTransfers.map((tx) => (
-              <div
-                key={tx.id}
-                className="flex items-center justify-between text-xs border-b border-slate-900/50 pb-2 last:border-0 last:pb-0"
-              >
-                <div className="space-y-0.5">
-                  <span className="font-mono text-white font-semibold">
-                    {tx.id}
-                  </span>
-                  <p className="text-[10px] text-slate-500">{tx.desc}</p>
-                </div>
-                <div className="text-right">
-                  <span className="font-mono text-blue-400 font-bold">
-                    +${tx.amount.toLocaleString()}
-                  </span>
-                  <div className="w-32 h-1 bg-slate-900 border border-slate-800 rounded-full mt-1 overflow-hidden">
-                    <div
-                      className="bg-blue-500 h-full rounded-full"
-                      style={{
-                        width: `${Math.min(
-                          100,
-                          (tx.amount / largestTransfers[0].amount) * 100
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+    <div className="bg-white rounded-xl border border-slate-200 p-5 card-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">Transaction Activity</h2>
+          <p className="text-xs text-slate-500 mt-0.5">7-day transaction status breakdown</p>
+        </div>
+        <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
+          Last 7 days
+        </span>
+      </div>
+      <ResponsiveContainer width="100%" height={220}>
+        <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gSuccess" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#059669" stopOpacity={0.12} />
+              <stop offset="95%" stopColor="#059669" stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="gFailed" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.12} />
+              <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            axisLine={false}
+            tickLine={false}
+            allowDecimals={false}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend
+            wrapperStyle={{ fontSize: "11px", paddingTop: "12px" }}
+            iconType="circle"
+            iconSize={8}
+          />
+          <Area
+            type="monotone"
+            dataKey="success"
+            name="Successful"
+            stroke="#059669"
+            strokeWidth={2}
+            fill="url(#gSuccess)"
+          />
+          <Area
+            type="monotone"
+            dataKey="failed"
+            name="Failed"
+            stroke="#ef4444"
+            strokeWidth={2}
+            fill="url(#gFailed)"
+          />
+          <Area
+            type="monotone"
+            dataKey="pending"
+            name="Pending"
+            stroke="#f59e0b"
+            strokeWidth={2}
+            fill="none"
+            strokeDasharray="4 2"
+          />
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
   );
 }

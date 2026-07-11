@@ -1,153 +1,111 @@
 "use client";
 
 import * as React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  ShieldAlert,
-  GitCompare,
-  Camera,
-  Layers,
-} from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ledgerService } from "@/services/api/endpoints";
+import { ArrowUpRight, TrendingUp } from "lucide-react";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
 
-interface LedgerTimelineProps {
-  ledgerEntries: any[];
-  snapshots: any[];
-  fraudAlerts: any[];
-  reconciliationReport: any | null;
-}
+export function LedgerTimeline() {
+  const { data: entries = [], isLoading } = useQuery({
+    queryKey: ["ledger"],
+    queryFn: ledgerService.list,
+  });
 
-export function LedgerTimeline({
-  ledgerEntries = [],
-  snapshots = [],
-  fraudAlerts = [],
-  reconciliationReport,
-}: LedgerTimelineProps) {
-  const getTimelineItems = () => {
-    const items: any[] = [];
-
-    ledgerEntries.forEach((entry) => {
-      const isDeposit =
-        entry.entryType === "CREDIT" &&
-        (entry.description?.toLowerCase().includes("seed") ||
-          entry.description?.toLowerCase().includes("deposit") ||
-          entry.description?.toLowerCase().includes("infusion"));
-
-      items.push({
-        id: `ledger-${entry.id}`,
-        type: isDeposit ? "deposit" : "transfer",
-        title: isDeposit ? "Seed Inflow Credit" : "Atomic Ledger Entry",
-        description:
-          entry.description ||
-          `${entry.entryType} of $${Number(entry.amount)}`,
-        amount: Number(entry.amount),
-        entryType: entry.entryType,
-        timestamp: new Date(entry.createdAt).getTime(),
-      });
-    });
-
-    snapshots.forEach((snap) => {
-      items.push({
-        id: `snapshot-${snap.id}`,
-        type: "snapshot",
-        title: "State Checkpoint Generated",
-        description: `Balance snapshot on account ${snap.accountId.slice(
-          0,
-          8
-        )}... at $${Number(snap.balance)}`,
-        timestamp: new Date(snap.createdAt).getTime(),
-      });
-    });
-
-    fraudAlerts.forEach((alert) => {
-      items.push({
-        id: `fraud-${alert.id}`,
-        type: "fraud",
-        title: "Risk Telemetry Triggered",
-        description: `Risk score ${alert.riskScore} severity ${
-          alert.severity
-        } on alert: ${alert.triggeredRules[0]}`,
-        timestamp: new Date(alert.createdAt).getTime(),
-      });
-    });
-
-    if (reconciliationReport) {
-      items.push({
-        id: `recon-${reconciliationReport.runId}`,
-        type: "reconciliation",
-        title: "Audit Recon Run Completed",
-        description: `Scanned ledger entries. Matched: ${reconciliationReport.totalMatched}, Anomalies: ${reconciliationReport.totalMismatched}`,
-        timestamp: new Date(reconciliationReport.createdAt).getTime(),
-      });
-    }
-
-    return items.sort((a, b) => b.timestamp - a.timestamp).slice(0, 6);
-  };
-
-  const timeline = getTimelineItems();
+  const recent = [...entries]
+    .sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
+    .slice(0, 8);
 
   return (
-    <Card className="bg-slate-950 border-slate-900 select-none">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-xs font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-          <Layers className="h-4 w-4 text-blue-500" />
-          Ledger Activity Stream
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="py-2">
-        {timeline.length === 0 ? (
-          <p className="text-xs text-slate-500 font-mono italic text-center py-6">
-            No system log streams captured yet.
-          </p>
-        ) : (
-          <div className="relative pl-4 border-l border-slate-800 space-y-5 my-2">
-            {timeline.map((item) => {
-              let Icon = ArrowUpRight;
-              let iconColor =
-                "bg-blue-500/10 text-blue-400 border-blue-500/20";
+    <div className="bg-white rounded-xl border border-slate-200 p-5 card-shadow">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">Ledger Timeline</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Recent double-entry events</p>
+        </div>
+        <Link
+          href="/ledger"
+          className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-0.5"
+        >
+          Explorer <ArrowUpRight className="h-3 w-3" />
+        </Link>
+      </div>
 
-              if (item.type === "deposit") {
-                Icon = ArrowDownLeft;
-                iconColor =
-                  "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-              } else if (item.type === "snapshot") {
-                Icon = Camera;
-                iconColor =
-                  "bg-indigo-500/10 text-indigo-400 border-indigo-500/20";
-              } else if (item.type === "fraud") {
-                Icon = ShieldAlert;
-                iconColor =
-                  "bg-rose-500/10 text-rose-450 border-rose-500/20";
-              } else if (item.type === "reconciliation") {
-                Icon = GitCompare;
-                iconColor =
-                  "bg-amber-500/10 text-amber-450 border-amber-500/20";
-              }
+      {isLoading ? (
+        <div className="animate-pulse space-y-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex gap-3">
+              <div className="h-4 w-4 bg-slate-100 rounded-full mt-1 shrink-0" />
+              <div className="flex-1 space-y-1.5">
+                <div className="h-3 bg-slate-100 rounded w-3/4" />
+                <div className="h-2.5 bg-slate-100 rounded w-1/2" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : recent.length === 0 ? (
+        <div className="flex flex-col items-center py-8 text-slate-400 gap-2">
+          <TrendingUp className="h-8 w-8 text-slate-300" />
+          <p className="text-xs">No ledger entries yet</p>
+        </div>
+      ) : (
+        <div className="relative pl-4">
+          {/* Vertical line */}
+          <div className="absolute left-[7px] top-2 bottom-2 w-px bg-slate-100" />
 
-              return (
-                <div key={item.id} className="relative space-y-1">
-                  {/* Timeline Dot Indicator */}
-                  <span
-                    className={`absolute -left-[24px] top-0.5 flex items-center justify-center h-4.5 w-4.5 rounded-full border ${iconColor}`}
-                  >
-                    <Icon className="h-2.5 w-2.5" />
-                  </span>
-                  <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
-                    <span className="font-semibold text-slate-300">
-                      {item.title}
-                    </span>
-                    <span>{new Date(item.timestamp).toLocaleTimeString()}</span>
+          <div className="space-y-4">
+            {recent.map((entry, idx) => (
+              <div key={entry.id} className="relative flex gap-3">
+                {/* Timeline dot */}
+                <div
+                  className={cn(
+                    "absolute -left-4 top-1 h-3 w-3 rounded-full border-2 border-white shrink-0",
+                    entry.entryType === "CREDIT"
+                      ? "bg-emerald-400"
+                      : "bg-red-400"
+                  )}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span
+                        className={cn(
+                          "text-[10px] font-bold uppercase tracking-wider",
+                          entry.entryType === "CREDIT"
+                            ? "text-emerald-600"
+                            : "text-red-600"
+                        )}
+                      >
+                        {entry.entryType}
+                      </span>
+                      <p className="text-xs text-slate-700 mt-0.5 truncate">
+                        {entry.description || "Ledger adjustment"}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                        acct: {entry.accountId.slice(0, 8)}…
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-semibold text-slate-900 tabular-nums">
+                        ${Number(entry.amount).toLocaleString()}
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {new Date(entry.createdAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-[11px] text-slate-400 font-mono leading-normal">
-                    {item.description}
-                  </p>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   );
 }

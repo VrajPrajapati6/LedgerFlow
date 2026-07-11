@@ -1,144 +1,80 @@
 "use client";
 
 import * as React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { GitCompare, CheckCircle2, Info } from "lucide-react";
-import { ReconciliationReport, ReconciliationFailure } from "@/types";
+import { useQuery } from "@tanstack/react-query";
+import { reconciliationService } from "@/services/api/endpoints";
+import { GitCompare, CheckCircle2, ArrowUpRight } from "lucide-react";
+import Link from "next/link";
 
-interface ReconciliationSummaryProps {
-  report: ReconciliationReport | null;
-  failures: ReconciliationFailure[];
-}
+export function ReconciliationSummary() {
+  const { data: report, isLoading } = useQuery({
+    queryKey: ["reconciliationReport"],
+    queryFn: reconciliationService.getReport,
+  });
 
-export function ReconciliationSummary({
-  report,
-  failures = [],
-}: ReconciliationSummaryProps) {
-  const matched = report ? report.totalMatched : 0;
-  const mismatched = report ? report.totalMismatched : failures.length;
-
-  const countByType = (type: string) => {
-    return failures.filter((f) => f.mismatchType === type).length;
-  };
-
-  const missingCount = countByType("MISSING_SETTLEMENT");
-  const amountMismatchCount = countByType("AMOUNT_MISMATCH");
-  const statusMismatchCount = countByType("STATUS_MISMATCH");
-  const duplicateCount = countByType("DUPLICATE_SETTLEMENT");
-
-  const totalActions = matched + mismatched;
+  const total = report
+    ? report.totalMatched + report.totalMismatched
+    : 0;
   const matchRate =
-    totalActions > 0 ? ((matched / totalActions) * 100).toFixed(1) : "100.0";
+    total > 0 && report
+      ? ((report.totalMatched / total) * 100).toFixed(0)
+      : "0";
 
   return (
-    <Card className="bg-slate-950 border-slate-900 select-none">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-xs font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-          <GitCompare className="h-4 w-4 text-blue-500" />
-          Reconciliation Center
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Match Rate Overview */}
-        <div className="flex items-center justify-between bg-slate-900 border border-slate-800 p-3 rounded">
-          <div className="space-y-1">
-            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">
-              Match rate accuracy
-            </span>
-            <div className="text-2xl font-bold text-white font-mono">
-              {matchRate}%
-            </div>
-          </div>
-          <div className="text-right space-y-0.5">
-            <span className="text-[9px] font-mono text-slate-400 block">
-              Matched: {matched}
-            </span>
-            <span className="text-[9px] font-mono text-rose-400 block font-semibold">
-              Anomalies: {mismatched}
-            </span>
-          </div>
-        </div>
+    <div className="bg-white rounded-xl border border-slate-200 p-5 card-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+          <GitCompare className="h-4 w-4 text-violet-500" />
+          Reconciliation
+        </h2>
+        <Link
+          href="/reconciliation"
+          className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-0.5"
+        >
+          View <ArrowUpRight className="h-3 w-3" />
+        </Link>
+      </div>
 
-        {/* Mismatch breakdown */}
+      {isLoading ? (
+        <div className="animate-pulse space-y-2">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-8 bg-slate-100 rounded-lg" />
+          ))}
+        </div>
+      ) : !report ? (
+        <div className="flex flex-col items-center py-6 text-slate-400 gap-2">
+          <GitCompare className="h-8 w-8 text-slate-300" />
+          <p className="text-xs">No reconciliation data yet</p>
+        </div>
+      ) : (
         <div className="space-y-2">
-          <h4 className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
-            Discrepancy Breakdown
-          </h4>
-          <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-            <div className="flex justify-between items-center bg-slate-900/40 p-2 rounded border border-slate-900/60">
-              <span className="text-slate-400 text-[10px]">Missing</span>
-              <span
-                className={`font-semibold ${
-                  missingCount > 0 ? "text-rose-450 font-bold" : "text-slate-500"
-                }`}
-              >
-                {missingCount}
-              </span>
+          <div className="flex items-center justify-between px-3 py-2 bg-emerald-50 rounded-lg">
+            <span className="text-xs text-emerald-700">Matched Records</span>
+            <span className="text-xs font-bold text-emerald-700">
+              {report.totalMatched}
+            </span>
+          </div>
+          <div className="flex items-center justify-between px-3 py-2 bg-red-50 rounded-lg">
+            <span className="text-xs text-red-700">Mismatched Records</span>
+            <span className="text-xs font-bold text-red-700">
+              {report.totalMismatched}
+            </span>
+          </div>
+          {/* Match rate bar */}
+          <div className="pt-1">
+            <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+              <span>Match Rate</span>
+              <span className="font-semibold text-slate-700">{matchRate}%</span>
             </div>
-            <div className="flex justify-between items-center bg-slate-900/40 p-2 rounded border border-slate-900/60">
-              <span className="text-slate-400 text-[10px]">Amount Mis</span>
-              <span
-                className={`font-semibold ${
-                  amountMismatchCount > 0
-                    ? "text-rose-450 font-bold"
-                    : "text-slate-500"
-                }`}
-              >
-                {amountMismatchCount}
-              </span>
-            </div>
-            <div className="flex justify-between items-center bg-slate-900/40 p-2 rounded border border-slate-900/60">
-              <span className="text-slate-400 text-[10px]">Status Dev</span>
-              <span
-                className={`font-semibold ${
-                  statusMismatchCount > 0
-                    ? "text-rose-450 font-bold"
-                    : "text-slate-500"
-                }`}
-              >
-                {statusMismatchCount}
-              </span>
-            </div>
-            <div className="flex justify-between items-center bg-slate-900/40 p-2 rounded border border-slate-900/60">
-              <span className="text-slate-400 text-[10px]">Duplicates</span>
-              <span
-                className={`font-semibold ${
-                  duplicateCount > 0
-                    ? "text-rose-450 font-bold"
-                    : "text-slate-500"
-                }`}
-              >
-                {duplicateCount}
-              </span>
+            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all duration-700"
+                style={{ width: `${matchRate}%` }}
+              />
             </div>
           </div>
         </div>
-
-        {/* Latest Run status */}
-        <div className="space-y-2 border-t border-slate-900 pt-3">
-          <h4 className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
-            Latest Audit Scan
-          </h4>
-          {report ? (
-            <div className="flex items-center justify-between text-[11px] bg-slate-900/20 p-2 rounded border border-slate-900/30">
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                <span className="text-slate-300 font-mono">Scan Completed</span>
-              </div>
-              <span className="text-[10px] text-slate-500 font-mono">
-                {new Date(report.createdAt).toLocaleTimeString()}
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 text-[11px] bg-slate-900/10 p-2 rounded border border-slate-900/20">
-              <Info className="h-3.5 w-3.5 text-amber-500" />
-              <span className="text-slate-400 italic font-mono">
-                No scans executed. Run Reconcile.
-              </span>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }

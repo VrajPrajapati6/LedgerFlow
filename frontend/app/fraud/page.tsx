@@ -1,22 +1,13 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageLoader } from "@/components/feedback/Loader";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { fraudService } from "@/services/api/endpoints";
+import { FraudAlert } from "@/types";
+import { PageLoader, EmptyState } from "@/components/feedback/Loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
@@ -27,635 +18,241 @@ import {
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-} from "recharts";
-import { fraudService } from "@/services/api/endpoints";
-import {
-  ShieldAlert,
-  RotateCw,
-  Search,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Info,
-  Clock,
-  ArrowRight,
-  TrendingUp,
-} from "lucide-react";
-import { FraudAlert } from "@/types";
+import { ShieldAlert, Search, ChevronUp, ChevronDown, ChevronsUpDown, ShieldCheck, AlertTriangle } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export default function FraudCenterPage() {
+const SEV_STYLE: Record<string, string> = {
+  HIGH: "bg-red-50 text-red-700 border-red-200",
+  MEDIUM: "bg-amber-50 text-amber-700 border-amber-200",
+  LOW: "bg-blue-50 text-blue-700 border-blue-200",
+};
+
+export default function FraudPage() {
   const [search, setSearch] = React.useState("");
-  const [filterSeverity, setFilterSeverity] = React.useState("all");
-  const [filterRule, setFilterRule] = React.useState("all");
+  const [sevFilter, setSevFilter] = React.useState("ALL");
+  const [sortKey, setSortKey] = React.useState<"createdAt" | "riskScore" | "severity">("createdAt");
+  const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc");
+  const [page, setPage] = React.useState(1);
+  const [selected, setSelected] = React.useState<FraudAlert | null>(null);
+  const PAGE_SIZE = 15;
 
-  const [selectedAlert, setSelectedAlert] = React.useState<FraudAlert | null>(
-    null
-  );
-  const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
-
-  const {
-    data: alerts = [],
-    isLoading,
-    refetch,
-    isRefetching,
-  } = useQuery({
+  const { data: alerts = [], isLoading, refetch } = useQuery({
     queryKey: ["fraudAlerts"],
     queryFn: fraudService.listAlerts,
   });
 
-  const handleAction = (actionName: string) => {
-    toast.promise(
-      new Promise((resolve) => setTimeout(resolve, 1000)),
-      {
-        loading: `Executing action: ${actionName}...`,
-        success: `Alert successfully marked as: ${actionName}`,
-        error: "Action failed",
-      }
-    );
-    setIsDrawerOpen(false);
+  const handleSort = (key: typeof sortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+    setPage(1);
   };
 
-  // Filter
   const filtered = alerts.filter((a) => {
-    const s = search.toLowerCase();
-    const matchesSearch =
-      a.id.toLowerCase().includes(s) ||
-      a.accountId.toLowerCase().includes(s) ||
-      a.transactionId.toLowerCase().includes(s);
-
-    const matchesSeverity =
-      filterSeverity === "all" ||
-      a.severity.toLowerCase() === filterSeverity.toLowerCase();
-
-    const matchesRule =
-      filterRule === "all" ||
-      a.triggeredRules.some((r) =>
-        r.toLowerCase().includes(filterRule.toLowerCase())
-      );
-
-    return matchesSearch && matchesSeverity && matchesRule;
+    const q = search.toLowerCase();
+    const matchSearch = !q || a.id.toLowerCase().includes(q) || a.accountId.toLowerCase().includes(q) || a.transactionId.toLowerCase().includes(q);
+    const matchSev = sevFilter === "ALL" || a.severity === sevFilter;
+    return matchSearch && matchSev;
   });
 
-  if (isLoading) {
-    return <PageLoader />;
-  }
+  const sorted = [...filtered].sort((a, b) => {
+    const va = (a as any)[sortKey] ?? "";
+    const vb = (b as any)[sortKey] ?? "";
+    const cmp = String(va).localeCompare(String(vb));
+    return sortDir === "asc" ? cmp : -cmp;
+  });
 
-  // Stats Calculations
-  const totalAlerts = alerts.length;
-  const highRiskCount = alerts.filter((a) => a.severity === "HIGH").length;
-  const mediumRiskCount = alerts.filter((a) => a.severity === "MEDIUM").length;
-  const criticalTxs = alerts.filter((a) => a.riskScore > 75).length;
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // Recharts Data Aggregation
-  const getRuleDistributionData = () => {
-    const rulesMap: Record<string, number> = {};
-    alerts.forEach((a) => {
-      a.triggeredRules.forEach((r) => {
-        rulesMap[r] = (rulesMap[r] || 0) + 1;
-      });
-    });
-    const data = Object.entries(rulesMap).map(([name, value]) => ({
-      name: name.replace(/_/g, " "),
-      count: value,
-    }));
+  const high = alerts.filter((a) => a.severity === "HIGH").length;
+  const medium = alerts.filter((a) => a.severity === "MEDIUM").length;
+  const low = alerts.filter((a) => a.severity === "LOW").length;
 
-    if (data.length === 0) {
-      return [
-        { name: "Velocity Exceeded", count: 4 },
-        { name: "Split Amount Flow", count: 2 },
-        { name: "High Amount Limit", count: 1 },
-      ];
-    }
-    return data;
-  };
+  const SortIcon = ({ col }: { col: typeof sortKey }) =>
+    sortKey !== col ? <ChevronsUpDown className="h-3 w-3 text-slate-300" /> :
+    sortDir === "asc" ? <ChevronUp className="h-3 w-3 text-blue-600" /> : <ChevronDown className="h-3 w-3 text-blue-600" />;
 
-  const getRiskTrendData = () => {
-    const datesMap: Record<string, { count: number; totalScore: number }> = {};
-    alerts.forEach((a) => {
-      const d = new Date(a.createdAt).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      });
-      if (!datesMap[d]) {
-        datesMap[d] = { count: 0, totalScore: 0 };
-      }
-      datesMap[d].count += 1;
-      datesMap[d].totalScore += a.riskScore;
-    });
-
-    const list = Object.entries(datesMap).map(([date, val]) => ({
-      date,
-      avgRisk: val.totalScore / val.count,
-    }));
-
-    if (list.length === 0) {
-      return [
-        { date: "Jul 06", avgRisk: 25 },
-        { date: "Jul 07", avgRisk: 42 },
-        { date: "Jul 08", avgRisk: 30 },
-        { date: "Jul 09", avgRisk: 55 },
-        { date: "Jul 10", avgRisk: 40 },
-        { date: "Jul 11", avgRisk: 68 },
-      ];
-    }
-    return list;
-  };
-
-  const ruleData = getRuleDistributionData();
-  const trendData = getRiskTrendData();
+  if (isLoading) return <PageLoader />;
 
   return (
     <div className="space-y-6">
-      {/* Title Header */}
-      <div className="flex flex-col gap-4 border-b border-slate-900 pb-6 select-none sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-white font-sans sm:text-3xl">
-            Fraud Investigation Center
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-5">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <ShieldAlert className="h-5 w-5 text-red-500" /> Fraud Center
           </h1>
-          <p className="text-xs text-slate-500 font-mono">
-            RISK AUDIT INTELLIGENCE • SYSTEM SECURITY CONSOLE
-          </p>
+          <p className="text-sm text-slate-500 mt-0.5">Risk alert monitoring and transaction investigation console</p>
         </div>
-        <Button
-          onClick={() => refetch()}
-          variant="outline"
-          className="h-9 w-9 p-0 bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
-          disabled={isRefetching}
-        >
-          <RotateCw
-            className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`}
-          />
+        <Button onClick={() => refetch()} variant="outline" size="sm" className="border-slate-200 text-slate-600 hover:bg-slate-100 h-8 text-xs gap-1.5">
+          Refresh Alerts
         </Button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6 select-none">
-        <Card className="bg-slate-950 border-slate-900">
-          <CardContent className="p-4 space-y-1.5">
-            <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">
-              Total Alerts
-            </span>
-            <div className="text-xl font-bold text-white font-mono">
-              {totalAlerts}
-            </div>
-            <p className="text-[9px] text-slate-550 leading-tight">
-              Anomalies flagged
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-slate-950 border-slate-900">
-          <CardContent className="p-4 space-y-1.5">
-            <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">
-              High Risk
-            </span>
-            <div className="text-xl font-bold text-rose-500 font-mono">
-              {highRiskCount}
-            </div>
-            <p className="text-[9px] text-slate-550 leading-tight">
-              Requires immediate action
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-slate-950 border-slate-900">
-          <CardContent className="p-4 space-y-1.5">
-            <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">
-              Medium Risk
-            </span>
-            <div className="text-xl font-bold text-amber-500 font-mono">
-              {mediumRiskCount}
-            </div>
-            <p className="text-[9px] text-slate-550 leading-tight">
-              Awaiting compliance logs
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-slate-950 border-slate-900">
-          <CardContent className="p-4 space-y-1.5">
-            <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">
-              Critical Transactions
-            </span>
-            <div className="text-xl font-bold text-rose-500 font-mono">
-              {criticalTxs}
-            </div>
-            <p className="text-[9px] text-slate-550 leading-tight">
-              Risk rating score &gt; 75
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-slate-950 border-slate-900">
-          <CardContent className="p-4 space-y-1.5">
-            <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">
-              Risk Velocity Trend
-            </span>
-            <div className="text-base font-bold text-emerald-450 font-mono flex items-center gap-1">
-              <TrendingUp className="h-4 w-4" /> Stable
-            </div>
-            <p className="text-[9px] text-slate-550 leading-tight">
-              Exchange vector check
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-slate-950 border-slate-900">
-          <CardContent className="p-4 space-y-1.5">
-            <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">
-              Accuracy Rating
-            </span>
-            <div className="text-xl font-bold text-white font-mono">
-              99.8%
-            </div>
-            <p className="text-[9px] text-slate-550 leading-tight">
-              Operational success rate
-            </p>
-          </CardContent>
-        </Card>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: "Total Alerts", value: alerts.length, color: "text-slate-900", bg: "bg-slate-50 border-slate-200" },
+          { label: "High Severity", value: high, color: "text-red-700", bg: "bg-red-50 border-red-200" },
+          { label: "Medium Severity", value: medium, color: "text-amber-700", bg: "bg-amber-50 border-amber-200" },
+          { label: "Low Severity", value: low, color: "text-blue-700", bg: "bg-blue-50 border-blue-200" },
+        ].map((s) => (
+          <div key={s.label} className={cn("rounded-xl border p-4", s.bg)}>
+            <p className="text-xs font-medium text-slate-500 mb-0.5">{s.label}</p>
+            <p className={cn("text-2xl font-bold", s.color)}>{s.value}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Analytics Charts */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 select-none">
-        {/* Risk Trend Chart */}
-        <Card className="bg-slate-950 border-slate-900">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-mono text-slate-450 uppercase tracking-wider">
-              System Risk Exposure over Time
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRisk" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis
-                  dataKey="date"
-                  stroke="#475569"
-                  fontSize={9}
-                  fontFamily="monospace"
-                  tickLine={false}
-                />
-                <YAxis
-                  stroke="#475569"
-                  fontSize={9}
-                  fontFamily="monospace"
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(v) => `${v}%`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#020617",
-                    borderColor: "#1e293b",
-                    fontSize: "11px",
-                    fontFamily: "monospace",
-                    color: "#cbd5e1",
-                  }}
-                  formatter={(v: any) => [`${Number(v).toFixed(1)}%`, "Avg Risk"]}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="avgRisk"
-                  stroke="#ef4444"
-                  strokeWidth={1.5}
-                  fillOpacity={1}
-                  fill="url(#colorRisk)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Risk by Rule */}
-        <Card className="bg-slate-950 border-slate-900">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-mono text-slate-450 uppercase tracking-wider">
-              Triggered Risk Parameters Breakdown
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={ruleData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                <XAxis
-                  dataKey="name"
-                  stroke="#475569"
-                  fontSize={8}
-                  fontFamily="monospace"
-                  tickLine={false}
-                />
-                <YAxis
-                  stroke="#475569"
-                  fontSize={9}
-                  fontFamily="monospace"
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#020617",
-                    borderColor: "#1e293b",
-                    fontSize: "11px",
-                    fontFamily: "monospace",
-                    color: "#cbd5e1",
-                  }}
-                />
-                <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filter Toolbar */}
-      <div className="flex flex-wrap items-center gap-2.5 select-none">
-        <div className="relative w-full sm:w-56">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
-          <Input
-            placeholder="Search Account ID, Alert ID..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 bg-slate-900 border-slate-850 text-white text-xs h-9"
-          />
+      {/* Risk Indicator */}
+      {high > 0 && (
+        <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-5 py-3.5">
+          <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
+          <p className="text-sm text-red-800 font-medium">
+            {high} high-severity alert{high > 1 ? "s" : ""} require immediate investigation.
+          </p>
         </div>
+      )}
+      {high === 0 && alerts.length > 0 && (
+        <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3.5">
+          <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" />
+          <p className="text-sm text-emerald-800 font-medium">No critical threats. All high-severity alerts resolved.</p>
+        </div>
+      )}
 
-        <Select
-          value={filterSeverity}
-          onValueChange={(val) => setFilterSeverity(val || "all")}
-        >
-          <SelectTrigger className="w-36 bg-slate-900 border-slate-850 text-slate-300 text-xs h-9">
-            <SelectValue placeholder="All Severities" />
-          </SelectTrigger>
-          <SelectContent className="bg-slate-950 border-slate-800 text-slate-200">
-            <SelectItem value="all">All Severities</SelectItem>
-            <SelectItem value="HIGH">High Risk</SelectItem>
-            <SelectItem value="MEDIUM">Medium Risk</SelectItem>
-            <SelectItem value="LOW">Low Risk</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={filterRule}
-          onValueChange={(val) => setFilterRule(val || "all")}
-        >
-          <SelectTrigger className="w-36 bg-slate-900 border-slate-850 text-slate-300 text-xs h-9">
-            <SelectValue placeholder="All Rules" />
-          </SelectTrigger>
-          <SelectContent className="bg-slate-950 border-slate-800 text-slate-200">
-            <SelectItem value="all">All Rules</SelectItem>
-            <SelectItem value="VELOCITY">Velocity check</SelectItem>
-            <SelectItem value="LIMIT">Threshold check</SelectItem>
+      {/* Filters */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <Input placeholder="Search by alert ID, account, or transaction..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="pl-9 h-9 text-sm border-slate-200 bg-white" />
+        </div>
+        <Select value={sevFilter} onValueChange={(v) => { setSevFilter(v ?? "ALL"); setPage(1); }}>
+          <SelectTrigger className="h-9 w-40 text-sm border-slate-200"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All Severities</SelectItem>
+            <SelectItem value="HIGH">High</SelectItem>
+            <SelectItem value="MEDIUM">Medium</SelectItem>
+            <SelectItem value="LOW">Low</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* Alerts Table */}
-      <div className="border border-slate-900 rounded-lg overflow-hidden select-none">
-        <Table>
-          <TableHeader className="bg-slate-900/50">
-            <TableRow className="border-b border-slate-900">
-              <TableHead className="text-[10px] font-mono uppercase text-slate-400 py-3">
-                Alert ID
-              </TableHead>
-              <TableHead className="text-[10px] font-mono uppercase text-slate-400 py-3">
-                Transaction ID
-              </TableHead>
-              <TableHead className="text-[10px] font-mono uppercase text-slate-400 py-3">
-                Account ID
-              </TableHead>
-              <TableHead className="text-[10px] font-mono uppercase text-slate-400 py-3">
-                Risk Score
-              </TableHead>
-              <TableHead className="text-[10px] font-mono uppercase text-slate-400 py-3">
-                Severity
-              </TableHead>
-              <TableHead className="text-[10px] font-mono uppercase text-slate-400 py-3">
-                Triggered Rules
-              </TableHead>
-              <TableHead className="text-[10px] font-mono uppercase text-slate-400 py-3 text-right">
-                Commit Time
-              </TableHead>
-              <TableHead className="text-[10px] font-mono uppercase text-slate-400 py-3 text-right">
-                Actions
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={8}
-                  className="text-center py-8 text-xs text-slate-500 font-mono bg-slate-950/20"
-                >
-                  No active risk alerts recorded.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((a) => (
-                <TableRow
-                  key={a.id}
-                  className="border-b border-slate-900 hover:bg-slate-900/40 transition-colors"
-                >
-                  <TableCell className="font-mono text-slate-200 text-xs py-3 max-w-[120px] truncate">
-                    {a.id}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-slate-400 py-3 max-w-[110px] truncate">
-                    {a.transactionId}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-slate-400 py-3 max-w-[110px] truncate">
-                    {a.accountId}
-                  </TableCell>
-                  <TableCell className="py-3 font-mono">
-                    <span
-                      className={`font-semibold text-xs ${
-                        a.riskScore > 70
-                          ? "text-rose-500"
-                          : a.riskScore > 40
-                          ? "text-amber-500"
-                          : "text-slate-400"
-                      }`}
-                    >
-                      {a.riskScore}
-                    </span>
-                  </TableCell>
-                  <TableCell className="py-3">
-                    <Badge
-                      className={
-                        a.severity === "HIGH"
-                          ? "bg-rose-500/10 text-rose-450 border-rose-500/20 text-[9px] font-mono"
-                          : a.severity === "MEDIUM"
-                          ? "bg-amber-500/10 text-amber-450 border-amber-500/20 text-[9px] font-mono"
-                          : "bg-slate-500/10 text-slate-450 border-slate-500/20 text-[9px] font-mono"
-                      }
-                    >
-                      {a.severity}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-mono text-[10px] text-slate-400 max-w-[180px] truncate py-3">
-                    {a.triggeredRules.join(", ")}
-                  </TableCell>
-                  <TableCell className="font-mono text-[10px] text-slate-500 py-3 text-right">
-                    {new Date(a.createdAt).toLocaleString()}
-                  </TableCell>
-                  <TableCell className="py-3 text-right">
-                    <Button
-                      onClick={() => {
-                        setSelectedAlert(a);
-                        setIsDrawerOpen(true);
-                      }}
-                      variant="outline"
-                      className="h-7 px-2 text-[10px] bg-slate-900 border-slate-800 text-slate-350 hover:bg-slate-800 hover:text-white gap-1 cursor-pointer"
-                    >
-                      Inspect Risk
-                      <ArrowRight className="h-3 w-3 text-slate-550" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Investigation Details Drawer */}
-      <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
-        {selectedAlert && (
-          <SheetContent className="bg-slate-950 border-slate-900 text-slate-200 w-full sm:max-w-md overflow-y-auto scrollbar-thin select-none">
-            <SheetHeader className="pb-4 border-b border-slate-900">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">
-                  Risk telemetry alert
-                </span>
-                <Badge
-                  className={
-                    selectedAlert.severity === "HIGH"
-                      ? "bg-rose-500/10 text-rose-450 border-rose-500/20 text-[9px] font-mono"
-                      : "bg-amber-500/10 text-amber-450 border-amber-500/20 text-[9px] font-mono"
-                  }
-                >
-                  {selectedAlert.severity}
-                </Badge>
-              </div>
-              <SheetTitle className="text-white text-base font-mono mt-2">
-                Alert: {selectedAlert.id.slice(0, 16)}...
-              </SheetTitle>
-              <SheetDescription className="text-slate-400 text-xs font-mono">
-                Flagged at: {new Date(selectedAlert.createdAt).toLocaleString()}
-              </SheetDescription>
-            </SheetHeader>
-
-            <div className="space-y-6 py-5">
-              {/* Risk scores */}
-              <div className="bg-slate-900 border border-slate-850 p-4 rounded-lg flex items-center justify-between text-xs font-mono">
-                <span className="text-slate-500">ACCUMULATED RISK SCORE:</span>
-                <span
-                  className={`text-lg font-bold ${
-                    selectedAlert.riskScore > 70
-                      ? "text-rose-500"
-                      : "text-amber-500"
-                  }`}
-                >
-                  {selectedAlert.riskScore} / 100
-                </span>
-              </div>
-
-              {/* Account details */}
-              <div className="space-y-2">
-                <h4 className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
-                  Details
-                </h4>
-                <div className="bg-slate-900/40 border border-slate-900 p-3.5 rounded-lg space-y-2.5 text-xs font-mono">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">ACCOUNT ID:</span>
-                    <Link
-                      href={`/accounts/${selectedAlert.accountId}`}
-                      className="text-blue-400 hover:underline"
-                    >
-                      {selectedAlert.accountId.slice(0, 16)}...
-                    </Link>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">TRANSACTION ID:</span>
-                    <span className="text-slate-300">
-                      {selectedAlert.transactionId.slice(0, 16)}...
-                    </span>
-                  </div>
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden card-shadow">
+        {paginated.length === 0 ? (
+          <EmptyState
+            icon={<ShieldCheck className="h-6 w-6 text-emerald-500" />}
+            title="No fraud alerts"
+            description={alerts.length === 0 ? "No suspicious activity detected in the system." : "No alerts match your filters."}
+          />
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/60">
+                    {[
+                      { key: "id", label: "Alert ID" },
+                      { key: "accountId", label: "Account" },
+                      { key: "transactionId", label: "Transaction" },
+                      { key: "severity", label: "Severity" },
+                      { key: "riskScore", label: "Risk Score" },
+                      { key: "createdAt", label: "Detected" },
+                    ].map((col) => (
+                      <th key={col.key} onClick={() => handleSort(col.key as typeof sortKey)} className="text-left px-5 py-3 cursor-pointer group">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider group-hover:text-slate-700">{col.label}</span>
+                          {["severity", "riskScore", "createdAt"].includes(col.key) && <SortIcon col={col.key as typeof sortKey} />}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paginated.map((alert) => (
+                    <tr key={alert.id} onClick={() => setSelected(alert)} className="hover:bg-slate-50 transition-colors cursor-pointer">
+                      <td className="px-5 py-3.5"><span className="font-mono text-xs text-slate-500">{alert.id.slice(0, 10)}…</span></td>
+                      <td className="px-5 py-3.5"><span className="font-mono text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded">{alert.accountId.slice(0, 8)}…</span></td>
+                      <td className="px-5 py-3.5"><span className="font-mono text-xs text-slate-500">{alert.transactionId.slice(0, 8)}…</span></td>
+                      <td className="px-5 py-3.5">
+                        <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border", SEV_STYLE[alert.severity])}>
+                          {alert.severity}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-16 bg-slate-100 rounded-full overflow-hidden">
+                            <div className={cn("h-full rounded-full", alert.riskScore >= 70 ? "bg-red-500" : alert.riskScore >= 40 ? "bg-amber-500" : "bg-blue-400")} style={{ width: `${alert.riskScore}%` }} />
+                          </div>
+                          <span className="text-xs font-semibold text-slate-700 tabular-nums">{alert.riskScore}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-xs text-slate-400 tabular-nums">
+                        {new Date(alert.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/50">
+                <p className="text-xs text-slate-500">{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, sorted.length)} of {sorted.length}</p>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="h-7 px-2.5 text-xs border-slate-200">Previous</Button>
+                  <span className="text-xs text-slate-500 px-2">{page} / {totalPages}</span>
+                  <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="h-7 px-2.5 text-xs border-slate-200">Next</Button>
                 </div>
               </div>
+            )}
+          </>
+        )}
+      </div>
 
-              {/* Triggered rules details */}
-              <div className="space-y-2">
-                <h4 className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
-                  Triggered Security Parameters
-                </h4>
-                <div className="space-y-2">
-                  {selectedAlert.triggeredRules.map((rule) => (
-                    <div
-                      key={rule}
-                      className="bg-rose-950/10 border border-rose-900/30 p-3 rounded-lg text-xs font-mono space-y-1"
-                    >
-                      <span className="text-rose-400 font-semibold block uppercase">
-                        {rule}
-                      </span>
-                      <p className="text-[10px] text-slate-450 leading-tight">
-                        Exchange values violated default operational velocity checking limit thresholds.
-                      </p>
+      {/* Investigation Sheet */}
+      <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <SheetContent className="bg-white border-l border-slate-200 w-full sm:max-w-md">
+          <SheetHeader className="border-b border-slate-100 pb-4">
+            <SheetTitle className="text-slate-900 text-base font-bold">Alert Investigation</SheetTitle>
+          </SheetHeader>
+          {selected && (
+            <div className="mt-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border", SEV_STYLE[selected.severity])}>
+                  {selected.severity} RISK
+                </span>
+                <span className="text-sm font-bold text-slate-900">Score: {selected.riskScore}/100</span>
+              </div>
+              <div className="space-y-0">
+                {[
+                  { label: "Alert ID", value: selected.id, mono: true },
+                  { label: "Account ID", value: selected.accountId, mono: true },
+                  { label: "Transaction ID", value: selected.transactionId, mono: true },
+                  { label: "Detected At", value: new Date(selected.createdAt).toLocaleString() },
+                ].map((row) => (
+                  <div key={row.label} className="flex items-start justify-between py-3 border-b border-slate-100 last:border-0">
+                    <span className="text-xs text-slate-500">{row.label}</span>
+                    <span className={cn("text-xs font-medium text-slate-900 text-right max-w-[60%] break-all", row.mono && "font-mono")}>{row.value}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <p className="text-xs font-semibold text-slate-700 mb-2">Triggered Rules</p>
+                <div className="space-y-1">
+                  {selected.triggeredRules.map((rule, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />
+                      <span className="text-xs font-mono text-slate-600">{rule}</span>
                     </div>
                   ))}
                 </div>
               </div>
-
-              {/* Action buttons */}
-              <div className="space-y-2 border-t border-slate-900 pt-4 select-none">
-                <h4 className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
-                  Investigation actions
-                </h4>
-                <div className="grid grid-cols-3 gap-2">
-                  <Button
-                    onClick={() => handleAction("Ignore")}
-                    variant="outline"
-                    className="text-[10px] h-8 bg-slate-900 border-slate-800 text-slate-350 hover:bg-slate-800 cursor-pointer"
-                  >
-                    <XCircle className="h-3.5 w-3.5 mr-1 text-slate-500" />
-                    Ignore
-                  </Button>
-                  <Button
-                    onClick={() => handleAction("Reviewed")}
-                    variant="outline"
-                    className="text-[10px] h-8 bg-slate-900 border-slate-800 text-slate-350 hover:bg-slate-800 cursor-pointer"
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-emerald-500" />
-                    Approve
-                  </Button>
-                  <Button
-                    onClick={() => handleAction("Escalate")}
-                    className="text-[10px] h-8 bg-rose-600 hover:bg-rose-500 text-white gap-1 cursor-pointer"
-                  >
-                    <AlertTriangle className="h-3.5 w-3.5 text-white" />
-                    Escalate
-                  </Button>
-                </div>
-              </div>
             </div>
-          </SheetContent>
-        )}
+          )}
+        </SheetContent>
       </Sheet>
     </div>
   );

@@ -1,80 +1,110 @@
 "use client";
 
 import * as React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Cpu, Database, RefreshCw, Server } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  accountService,
+  transactionService,
+  snapshotService,
+  ledgerService,
+} from "@/services/api/endpoints";
+import { ArrowUpRight, Server, Database, Zap, Activity } from "lucide-react";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 export function SystemHealthCards() {
-  const healths = [
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: accountService.list,
+  });
+  const { data: transactions = [] } = useQuery({
+    queryKey: ["transactions"],
+    queryFn: transactionService.list,
+  });
+  const { data: snapshots = [] } = useQuery({
+    queryKey: ["snapshots"],
+    queryFn: snapshotService.list,
+  });
+  const { data: ledger = [] } = useQuery({
+    queryKey: ["ledger"],
+    queryFn: ledgerService.list,
+  });
+
+  const metrics = [
     {
-      title: "Backend Cluster",
-      status: "Healthy",
-      metric: "Uptime: 99.98%",
-      latency: "Latency: 6.4ms",
-      indicator: "bg-emerald-500",
-      icon: Cpu,
-    },
-    {
-      title: "Database Node",
-      status: "Connected",
-      metric: "Pool active: 8/20",
-      latency: "Disk usage: 14%",
-      indicator: "bg-emerald-500",
-      icon: Database,
-    },
-    {
-      title: "Redis State Store",
-      status: "Connected",
-      metric: "Hit rate: 98.2%",
-      latency: "Memory: 12.8MB",
-      indicator: "bg-emerald-500",
-      icon: RefreshCw,
-    },
-    {
-      title: "Kafka Event Stream",
-      status: "Idle",
-      metric: "Backlog: 0 messages",
-      latency: "Throughput: 0 msg/s",
-      indicator: "bg-emerald-500",
       icon: Server,
+      label: "API Gateway",
+      status: "Operational",
+      dot: "bg-emerald-400",
+      desc: "All endpoints healthy",
+      color: "text-emerald-600",
+    },
+    {
+      icon: Database,
+      label: "Ledger Engine",
+      status: `${ledger.length} events`,
+      dot: "bg-emerald-400",
+      desc: "Event store reachable",
+      color: "text-emerald-600",
+    },
+    {
+      icon: Zap,
+      label: "Transaction Bus",
+      status: `${transactions.length} records`,
+      dot: transactions.length > 0 ? "bg-emerald-400" : "bg-amber-400",
+      desc: "Transfer pipeline active",
+      color: transactions.length > 0 ? "text-emerald-600" : "text-amber-600",
+    },
+    {
+      icon: Activity,
+      label: "Snapshot Store",
+      status: `${snapshots.length} checkpoints`,
+      dot: "bg-emerald-400",
+      desc: "Checkpoints persisted",
+      color: "text-emerald-600",
     },
   ];
 
   return (
-    <Card className="bg-slate-950 border-slate-900 select-none">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-xs font-mono text-slate-400 uppercase tracking-wider">
-          Infrastructure Observability (Live)
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-3 md:grid-cols-4 p-5">
-        {healths.map((h) => {
-          const Icon = h.icon;
+    <div className="bg-white rounded-xl border border-slate-200 p-5 card-shadow">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">System Health</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Infrastructure service status</p>
+        </div>
+        <Link
+          href="/system-health"
+          className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-0.5"
+        >
+          Details <ArrowUpRight className="h-3 w-3" />
+        </Link>
+      </div>
+
+      <div className="space-y-3">
+        {metrics.map((m) => {
+          const Icon = m.icon;
           return (
             <div
-              key={h.title}
-              className="bg-slate-900 border border-slate-800 rounded p-3.5 space-y-3"
+              key={m.label}
+              className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-100"
             >
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${h.indicator} animate-pulse`}
-                  />
-                  <span className="text-[10px] font-mono text-white font-semibold uppercase">
-                    {h.title}
-                  </span>
-                </div>
-                <Icon className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+              <div className="h-8 w-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                <Icon className="h-3.5 w-3.5 text-slate-500" />
               </div>
-              <div className="space-y-0.5 text-[9px] font-mono text-slate-500 leading-normal">
-                <span className="text-slate-350 block">{h.status}</span>
-                <span className="block">{h.metric}</span>
-                <span className="block">{h.latency}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-slate-900">{m.label}</p>
+                <p className="text-[10px] text-slate-400 truncate">{m.desc}</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className={cn("h-2 w-2 rounded-full", m.dot)} />
+                <span className={cn("text-[10px] font-semibold", m.color)}>
+                  {m.status}
+                </span>
               </div>
             </div>
           );
         })}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

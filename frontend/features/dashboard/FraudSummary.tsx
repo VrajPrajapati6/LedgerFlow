@@ -1,132 +1,75 @@
 "use client";
 
 import * as React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ShieldAlert, AlertOctagon } from "lucide-react";
-import { FraudAlert } from "@/types";
+import { useQuery } from "@tanstack/react-query";
+import { fraudService } from "@/services/api/endpoints";
+import { ArrowUpRight, ShieldAlert, ShieldCheck, ShieldX } from "lucide-react";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
 
-interface FraudSummaryProps {
-  alerts: FraudAlert[];
-}
-
-export function FraudSummary({ alerts = [] }: FraudSummaryProps) {
-  const highRisk = alerts.filter((a) => a.severity === "HIGH");
-  const mediumRisk = alerts.filter((a) => a.severity === "MEDIUM");
-  const lowRisk = alerts.filter((a) => a.severity === "LOW");
-
-  // Collect top rules
-  const rulesMap: Record<string, number> = {};
-  alerts.forEach((a) => {
-    a.triggeredRules.forEach((rule) => {
-      rulesMap[rule] = (rulesMap[rule] || 0) + 1;
-    });
+export function FraudSummary() {
+  const { data: alerts = [], isLoading } = useQuery({
+    queryKey: ["fraudAlerts"],
+    queryFn: fraudService.listAlerts,
   });
 
-  const topRules = Object.entries(rulesMap)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3);
+  const high = alerts.filter((a) => a.severity === "HIGH").length;
+  const medium = alerts.filter((a) => a.severity === "MEDIUM").length;
+  const low = alerts.filter((a) => a.severity === "LOW").length;
 
   return (
-    <Card className="bg-slate-950 border-slate-900 select-none">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-xs font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-          <ShieldAlert className="h-4 w-4 text-rose-500" />
-          Fraud & Risk Center
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Severity Metrics */}
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="bg-slate-900 border border-slate-800 p-2 rounded">
-            <span className="text-[9px] font-mono text-rose-400 block uppercase">
-              High Risk
-            </span>
-            <span className="text-base font-bold text-rose-500 font-mono">
-              {highRisk.length}
-            </span>
-          </div>
-          <div className="bg-slate-900 border border-slate-800 p-2 rounded">
-            <span className="text-[9px] font-mono text-amber-400 block uppercase">
-              Medium Risk
-            </span>
-            <span className="text-base font-bold text-amber-500 font-mono">
-              {mediumRisk.length}
-            </span>
-          </div>
-          <div className="bg-slate-900 border border-slate-800 p-2 rounded">
-            <span className="text-[9px] font-mono text-slate-400 block uppercase">
-              Low Risk
-            </span>
-            <span className="text-base font-bold text-slate-300 font-mono">
-              {lowRisk.length}
-            </span>
-          </div>
-        </div>
+    <div className="bg-white rounded-xl border border-slate-200 p-5 card-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4 text-red-500" />
+          Fraud Summary
+        </h2>
+        <Link
+          href="/fraud"
+          className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-0.5"
+        >
+          View <ArrowUpRight className="h-3 w-3" />
+        </Link>
+      </div>
 
-        {/* Top Triggered Rules */}
+      {isLoading ? (
+        <div className="animate-pulse space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-8 bg-slate-100 rounded-lg" />
+          ))}
+        </div>
+      ) : alerts.length === 0 ? (
+        <div className="flex flex-col items-center py-6 text-slate-400 gap-2">
+          <ShieldCheck className="h-8 w-8 text-emerald-400" />
+          <p className="text-xs">No fraud alerts detected</p>
+        </div>
+      ) : (
         <div className="space-y-2">
-          <h4 className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
-            Top Risk Rule Matches
-          </h4>
-          {topRules.length === 0 ? (
-            <p className="text-[10px] text-slate-600 font-mono italic">
-              No rules matched recently.
-            </p>
-          ) : (
-            <div className="space-y-1.5">
-              {topRules.map(([rule, count]) => (
-                <div
-                  key={rule}
-                  className="flex justify-between items-center text-xs bg-slate-900/30 p-2 rounded border border-slate-900/60"
-                >
-                  <span className="font-mono text-slate-400 truncate max-w-[200px]">
-                    {rule}
-                  </span>
-                  <Badge
-                    variant="outline"
-                    className="bg-rose-500/10 text-rose-450 border-rose-500/20 text-[9px] font-mono"
-                  >
-                    {count} match{count > 1 ? "es" : ""}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Recent Suspicious Log list */}
-        <div className="space-y-2 border-t border-slate-900 pt-3">
-          <h4 className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
-            Suspicious Actions
-          </h4>
-          <div className="space-y-2">
-            {alerts.slice(0, 3).map((a) => (
-              <div
-                key={a.id}
-                className="flex items-start gap-2 bg-slate-900/20 p-2 rounded text-[11px]"
+          {[
+            { label: "High Severity", count: high, color: "text-red-600 bg-red-50 border-red-200" },
+            { label: "Medium Severity", count: medium, color: "text-amber-600 bg-amber-50 border-amber-200" },
+            { label: "Low Severity", count: low, color: "text-blue-600 bg-blue-50 border-blue-200" },
+          ].map((row) => (
+            <div
+              key={row.label}
+              className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg"
+            >
+              <span className="text-xs text-slate-600">{row.label}</span>
+              <span
+                className={cn(
+                  "text-xs font-bold px-2 py-0.5 rounded-full border",
+                  row.color
+                )}
               >
-                <AlertOctagon className="h-3.5 w-3.5 text-rose-400 mt-0.5 shrink-0" />
-                <div className="space-y-0.5 flex-1 min-w-0">
-                  <span className="font-mono text-slate-200 block truncate">
-                    Account {a.accountId.slice(0, 8)}...
-                  </span>
-                  <p className="text-[10px] text-slate-500 font-mono">
-                    Risk Score:{" "}
-                    <span className="text-rose-400 font-bold">{a.riskScore}</span>{" "}
-                    • {a.triggeredRules[0]}
-                  </p>
-                </div>
-              </div>
-            ))}
-            {alerts.length === 0 && (
-              <p className="text-[10px] text-slate-600 font-mono italic text-center py-2">
-                0 suspicious flags. Systems safe.
-              </p>
-            )}
-          </div>
+                {row.count}
+              </span>
+            </div>
+          ))}
+          <p className="text-[10px] text-slate-400 pt-1 text-center">
+            {alerts.length} total active alerts
+          </p>
         </div>
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }

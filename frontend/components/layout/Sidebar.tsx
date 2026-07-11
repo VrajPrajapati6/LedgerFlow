@@ -17,7 +17,6 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Database,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -27,6 +26,47 @@ interface SidebarProps {
   onItemClick?: () => void;
 }
 
+const navigation = [
+  {
+    title: "Overview",
+    items: [
+      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: "Operations",
+    items: [
+      { name: "Accounts", href: "/accounts", icon: Landmark },
+      { name: "Transactions", href: "/transactions", icon: ArrowLeftRight },
+      { name: "Ledger Explorer", href: "/ledger", icon: ScrollText },
+    ],
+  },
+  {
+    title: "Risk & Compliance",
+    items: [
+      {
+        name: "Fraud Center",
+        href: "/fraud",
+        icon: ShieldAlert,
+        badgeColor: "red",
+      },
+      { name: "Reconciliation", href: "/reconciliation", icon: GitCompare },
+      { name: "Audit Trail", href: "/audit", icon: History },
+    ],
+  },
+  {
+    title: "Infrastructure",
+    items: [
+      { name: "Snapshots", href: "/snapshots", icon: FileClock },
+      { name: "System Health", href: "/system-health", icon: Activity },
+    ],
+  },
+  {
+    title: "General",
+    items: [{ name: "Settings", href: "/settings", icon: Settings }],
+  },
+];
+
 export function Sidebar({
   isCollapsed,
   setIsCollapsed,
@@ -35,150 +75,108 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
 
-  const navigation = [
-    {
-      title: "Dashboard",
-      items: [
-        { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      ],
-    },
-    {
-      title: "Operations",
-      items: [
-        { name: "Accounts", href: "/accounts", icon: Landmark },
-        { name: "Transactions", href: "/transactions", icon: ArrowLeftRight },
-        { name: "Ledger Explorer", href: "/ledger", icon: ScrollText },
-      ],
-    },
-    {
-      title: "Risk & Compliance",
-      items: [
-        {
-          name: "Fraud Center",
-          href: "/fraud",
-          icon: ShieldAlert,
-          badge: "Alerts",
-        },
-        {
-          name: "Reconciliation",
-          href: "/reconciliation",
-          icon: GitCompare,
-          warning: true,
-        },
-        { name: "Audit Explorer", href: "/audit", icon: History },
-      ],
-    },
-    {
-      title: "Infrastructure",
-      items: [
-        { name: "Snapshot Manager", href: "/snapshots", icon: FileClock },
-        { name: "System Health", href: "/system-health", icon: Activity },
-      ],
-    },
-    {
-      title: "General",
-      items: [{ name: "Settings", href: "/settings", icon: Settings }],
-    },
-  ];
-
   return (
     <aside
       className={cn(
-        "flex flex-col h-full bg-slate-950 border-r border-slate-900 text-slate-300 transition-all duration-300 relative select-none",
-        isCollapsed ? "w-16" : "w-64",
+        "flex flex-col h-full bg-white border-r border-slate-200 transition-all duration-200 select-none",
+        isCollapsed ? "w-[60px]" : "w-60",
         className
       )}
     >
-      {/* Sidebar Header */}
-      <div className="flex items-center justify-between h-14 px-4 border-b border-slate-900">
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-2 font-semibold text-slate-100 font-mono tracking-tight shrink-0"
-          onClick={onItemClick}
-        >
-          <Database className="h-5 w-5 text-blue-500 shrink-0" />
-          {!isCollapsed && <span className="text-sm">FINCORE OS</span>}
-        </Link>
-        {!className && (
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="hidden md:flex items-center justify-center h-6 w-6 rounded border border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200 transition-colors"
-          >
-            {isCollapsed ? (
-              <ChevronRight className="h-3.5 w-3.5" />
-            ) : (
-              <ChevronLeft className="h-3.5 w-3.5" />
-            )}
-          </button>
+      {/* Logo / Brand Header */}
+      <div
+        className={cn(
+          "flex items-center h-14 border-b border-slate-200 shrink-0",
+          isCollapsed ? "px-0 justify-center" : "px-4 gap-3"
+        )}
+      >
+        {/* Logo mark */}
+        <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-blue-600 shrink-0">
+          <span className="text-white text-xs font-bold">LF</span>
+        </div>
+        {!isCollapsed && (
+          <div className="flex flex-col min-w-0">
+            <Link
+              href="/dashboard"
+              onClick={onItemClick}
+              className="text-sm font-semibold text-slate-900 tracking-tight leading-none hover:text-blue-600 transition-colors"
+            >
+              LedgerFlow
+            </Link>
+            <span className="text-[10px] text-slate-400 font-mono leading-none mt-0.5">
+              Financial Infrastructure
+            </span>
+          </div>
         )}
       </div>
 
       {/* Navigation Groups */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+      <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-5">
         {navigation.map((group, idx) => (
-          <div key={idx} className="space-y-1.5">
+          <div key={idx} className="space-y-0.5">
             {!isCollapsed && (
-              <h2 className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider font-mono">
+              <p className="px-3 mb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
                 {group.title}
-              </h2>
+              </p>
             )}
-            <ul className="space-y-1">
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const isActive =
-                  pathname === item.href ||
-                  pathname.startsWith(item.href + "/");
-                return (
-                  <li key={item.name}>
-                    <Link
-                      href={item.href}
-                      onClick={onItemClick}
-                      className={cn(
-                        "flex items-center gap-3 px-3 py-2 text-xs font-medium rounded-md transition-all",
-                        isActive
-                          ? "bg-blue-500/10 text-blue-450 border-l-2 border-blue-500 pl-2.5"
-                          : "hover:bg-slate-900 hover:text-slate-200 border-l-2 border-transparent"
-                      )}
-                      title={isCollapsed ? item.name : undefined}
-                    >
-                      <Icon
-                        className={cn(
-                          "h-4 w-4 shrink-0",
-                          isActive ? "text-blue-400" : "text-slate-400"
-                        )}
-                      />
-                      {!isCollapsed && (
-                        <span className="truncate flex-1">{item.name}</span>
-                      )}
-                      {!isCollapsed && item.badge && (
-                        <span className="px-1.5 py-0.5 text-[9px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded">
-                          {item.badge}
-                        </span>
-                      )}
-                      {!isCollapsed && item.warning && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                      )}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              const isActive =
+                pathname === item.href || pathname.startsWith(item.href + "/");
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={onItemClick}
+                  title={isCollapsed ? item.name : undefined}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-md text-sm font-medium transition-all duration-150",
+                    isCollapsed
+                      ? "justify-center h-9 w-9 mx-auto"
+                      : "px-3 py-2 w-full",
+                    isActive
+                      ? "bg-blue-50 text-blue-700 shadow-sm"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "shrink-0",
+                      isCollapsed ? "h-4.5 w-4.5" : "h-4 w-4",
+                      isActive ? "text-blue-600" : "text-slate-400"
+                    )}
+                  />
+                  {!isCollapsed && (
+                    <span className="truncate flex-1">{item.name}</span>
+                  )}
+                  {!isCollapsed && isActive && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
+                  )}
+                </Link>
+              );
+            })}
           </div>
         ))}
       </nav>
 
-      {/* Sidebar Footer */}
-      <div className="p-4 border-t border-slate-900 bg-slate-950/50">
-        {!isCollapsed ? (
-          <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
-            <span>ENV: DEV</span>
-            <span>V1.0.0</span>
-          </div>
-        ) : (
-          <div className="text-[10px] text-center text-slate-600 font-mono">
-            DEV
-          </div>
+      {/* Footer — Collapse Toggle + Version */}
+      <div className="border-t border-slate-200 p-3 flex items-center justify-between shrink-0">
+        {!isCollapsed && (
+          <span className="text-[10px] text-slate-400 font-mono">
+            v1.0 · Production
+          </span>
         )}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="hidden md:flex h-6 w-6 items-center justify-center rounded border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {isCollapsed ? (
+            <ChevronRight className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronLeft className="h-3.5 w-3.5" />
+          )}
+        </button>
       </div>
     </aside>
   );

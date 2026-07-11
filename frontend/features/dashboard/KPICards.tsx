@@ -1,174 +1,145 @@
 "use client";
 
 import * as React from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { useQuery } from "@tanstack/react-query";
 import {
-  Landmark,
-  ArrowLeftRight,
-  ScrollText,
-  DollarSign,
-  ShieldAlert,
-  GitCompare,
-  Camera,
-  HeartPulse,
-  TrendingUp,
-  TrendingDown,
-} from "lucide-react";
+  accountService,
+  transactionService,
+  ledgerService,
+  fraudService,
+} from "@/services/api/endpoints";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-interface KPICardsProps {
-  stats: {
-    totalAccounts: number;
-    totalTransactions: number;
-    totalLedgerEntries: number;
-    systemBalance: number;
-    fraudAlerts: number;
-    failedReconciliations: number;
-    snapshotsCount: number;
-    systemHealth: string;
-  };
+interface KPICardProps {
+  title: string;
+  value: string | number;
+  description: string;
+  trend?: "up" | "down" | "neutral";
+  trendLabel?: string;
+  accent?: "blue" | "emerald" | "amber" | "red" | "violet";
 }
 
-export function KPICards({ stats }: KPICardsProps) {
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 0,
-    }).format(val);
+function KPICard({
+  title,
+  value,
+  description,
+  trend = "neutral",
+  trendLabel,
+  accent = "blue",
+}: KPICardProps) {
+  const accentMap = {
+    blue: "bg-blue-50 text-blue-600 border-blue-100",
+    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
+    amber: "bg-amber-50 text-amber-600 border-amber-100",
+    red: "bg-red-50 text-red-600 border-red-100",
+    violet: "bg-violet-50 text-violet-600 border-violet-100",
   };
 
-  const cards = [
+  const TrendIcon =
+    trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus;
+  const trendColor =
+    trend === "up"
+      ? "text-emerald-600"
+      : trend === "down"
+      ? "text-red-500"
+      : "text-slate-400";
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5 card-shadow hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+          {title}
+        </p>
+        {trendLabel && (
+          <span
+            className={cn(
+              "inline-flex items-center gap-0.5 text-[10px] font-semibold",
+              trendColor
+            )}
+          >
+            <TrendIcon className="h-3 w-3" />
+            {trendLabel}
+          </span>
+        )}
+      </div>
+      <p className="text-2xl font-bold text-slate-900 tracking-tight mb-1">
+        {value}
+      </p>
+      <p className="text-xs text-slate-400">{description}</p>
+    </div>
+  );
+}
+
+export function KPICards() {
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: accountService.list,
+  });
+  const { data: transactions = [] } = useQuery({
+    queryKey: ["transactions"],
+    queryFn: transactionService.list,
+  });
+  const { data: ledger = [] } = useQuery({
+    queryKey: ["ledger"],
+    queryFn: ledgerService.list,
+  });
+  const { data: fraudAlerts = [] } = useQuery({
+    queryKey: ["fraudAlerts"],
+    queryFn: fraudService.listAlerts,
+  });
+
+  const successTxs = transactions.filter((t) => t.status === "SUCCESS");
+  const totalVolume = successTxs.reduce((s, t) => s + (t.amount || 0), 0);
+  const highRisk = fraudAlerts.filter((a) => a.severity === "HIGH").length;
+
+  const kpis: KPICardProps[] = [
     {
       title: "Total Accounts",
-      value: stats.totalAccounts,
-      description: "Provisioned user containers",
-      icon: Landmark,
-      iconColor: "text-blue-500",
-      trend: "+12% MoM",
-      trendUp: true,
+      value: accounts.length,
+      description: "Active ledger containers",
+      trend: "up",
+      trendLabel: "+2 this week",
+      accent: "blue",
     },
     {
-      title: "Total Transactions",
-      value: stats.totalTransactions,
-      description: "Atomic transfer requests",
-      icon: ArrowLeftRight,
-      iconColor: "text-blue-500",
-      trend: "+8% WoW",
-      trendUp: true,
+      title: "Transactions",
+      value: transactions.length,
+      description: "Total transfer records",
+      trend: "up",
+      trendLabel: `${successTxs.length} succeeded`,
+      accent: "emerald",
+    },
+    {
+      title: "Ledger Volume",
+      value: `$${totalVolume.toLocaleString()}`,
+      description: "Cumulative cleared amount",
+      trend: "up",
+      trendLabel: "USD",
+      accent: "violet",
     },
     {
       title: "Ledger Entries",
-      value: stats.totalLedgerEntries,
-      description: "Double-entry events log",
-      icon: ScrollText,
-      iconColor: "text-indigo-500",
-      trend: "+18% WoW",
-      trendUp: true,
-    },
-    {
-      title: "System Balance",
-      value: formatCurrency(stats.systemBalance),
-      description: "Aggregated active capital",
-      icon: DollarSign,
-      iconColor: "text-emerald-500",
-      trend: "+4.2% inflows",
-      trendUp: true,
+      value: ledger.length,
+      description: "Immutable event records",
+      trend: "neutral",
+      accent: "blue",
     },
     {
       title: "Fraud Alerts",
-      value: stats.fraudAlerts,
-      description: "Flagged transactions limit",
-      icon: ShieldAlert,
-      iconColor: stats.fraudAlerts > 0 ? "text-rose-500" : "text-slate-500",
-      trend: stats.fraudAlerts > 0 ? "Needs Review" : "0 alerts triggered",
-      trendUp: stats.fraudAlerts > 0 ? false : undefined,
-    },
-    {
-      title: "Failed Reconciliations",
-      value: stats.failedReconciliations,
-      description: "Discrepancy audit matches",
-      icon: GitCompare,
-      iconColor:
-        stats.failedReconciliations > 0 ? "text-amber-500" : "text-slate-500",
-      trend:
-        stats.failedReconciliations > 0
-          ? "Unsettled anomalies"
-          : "100% matched",
-      trendUp: stats.failedReconciliations > 0 ? false : undefined,
-    },
-    {
-      title: "Active Snapshots",
-      value: stats.snapshotsCount,
-      description: "Accelerated state checkpoints",
-      icon: Camera,
-      iconColor: "text-indigo-400",
-      trend: "Replay steps saved",
-      trendUp: true,
-    },
-    {
-      title: "System Health",
-      value: stats.systemHealth,
-      description: "Nodes and infrastructure",
-      icon: HeartPulse,
-      iconColor:
-        stats.systemHealth === "Operational"
-          ? "text-emerald-500"
-          : "text-amber-500",
-      trend: "Latency: <10ms",
-      trendUp: true,
+      value: fraudAlerts.length,
+      description: `${highRisk} high severity`,
+      trend: highRisk > 0 ? "down" : "neutral",
+      trendLabel: highRisk > 0 ? `${highRisk} critical` : "All clear",
+      accent: highRisk > 0 ? "red" : "emerald",
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 select-none">
-      {cards.map((c) => {
-        const Icon = c.icon;
-        return (
-          <Card
-            key={c.title}
-            className="bg-slate-950 border-slate-900 hover:border-slate-800 transition-colors"
-          >
-            <CardContent className="p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
-                  {c.title}
-                </span>
-                <div className={`p-1.5 rounded bg-slate-900 border border-slate-800`}>
-                  <Icon className={`h-4 w-4 ${c.iconColor}`} />
-                </div>
-              </div>
-              <div className="space-y-0.5">
-                <div className="text-xl font-bold text-white tracking-tight font-mono">
-                  {c.value}
-                </div>
-                <p className="text-[10px] text-slate-500 leading-normal">
-                  {c.description}
-                </p>
-              </div>
-              {c.trend !== undefined && (
-                <div className="flex items-center gap-1 text-[10px] font-mono">
-                  {c.trendUp === true ? (
-                    <TrendingUp className="h-3 w-3 text-emerald-500" />
-                  ) : c.trendUp === false ? (
-                    <TrendingDown className="h-3 w-3 text-rose-500" />
-                  ) : null}
-                  <span
-                    className={
-                      c.trendUp === true
-                        ? "text-emerald-500"
-                        : c.trendUp === false
-                        ? "text-rose-500"
-                        : "text-slate-400"
-                    }
-                  >
-                    {c.trend}
-                  </span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        );
-      })}
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      {kpis.map((kpi) => (
+        <KPICard key={kpi.title} {...kpi} />
+      ))}
     </div>
   );
 }

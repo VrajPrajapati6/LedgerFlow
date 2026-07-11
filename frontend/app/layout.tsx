@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/providers/ThemeProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { Shell } from "@/components/layout/Shell";
 import { Toaster } from "@/components/ui/sonner";
 import { ErrorBoundary } from "@/components/feedback/ErrorBoundary";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
@@ -18,8 +18,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LedgerFlow Console",
-  description: "Enterprise Financial Infrastructure Operating Console",
+  title: {
+    default: "LedgerFlow — Financial Infrastructure Platform",
+    template: "%s | LedgerFlow",
+  },
+  description:
+    "Enterprise-grade internal financial infrastructure platform for banking operations, auditors, fraud analysts, and risk teams.",
+  keywords: [
+    "ledger",
+    "financial infrastructure",
+    "banking operations",
+    "fraud detection",
+    "reconciliation",
+  ],
 };
 
 export default function RootLayout({
@@ -30,22 +41,15 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${geistMono.variable} h-full`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-slate-950 text-slate-100">
+      <body className="min-h-full flex flex-col bg-white text-slate-900 antialiased">
         <QueryProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="dark"
-            enableSystem={false}
-            disableTransitionOnChange
-          >
-            <ErrorBoundary>
-              <Shell>{children}</Shell>
-            </ErrorBoundary>
-            <Toaster position="top-right" theme="dark" />
-          </ThemeProvider>
+          <ErrorBoundary>
+            <Shell>{children}</Shell>
+          </ErrorBoundary>
+          <Toaster position="top-right" richColors />
         </QueryProvider>
       </body>
     </html>
