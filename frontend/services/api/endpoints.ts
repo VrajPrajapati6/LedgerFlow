@@ -73,6 +73,8 @@ export const fraudService = {
     apiClient<{ fraudAlert: FraudAlert }>(`/fraud/analyze/${transactionId}`, {
       method: "POST",
     }),
+  getAccountHistory: (accountId: string) =>
+    apiClient<FraudAlert[]>(`/fraud/${accountId}/history`),
 };
 
 export const reconciliationService = {
